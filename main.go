@@ -15,12 +15,14 @@ const (
 	gridColumns           = 250
 	gridRows              = 200
 	autoPlayIntervalTicks = 6
+	fastPlayIntervalTicks = 1
 )
 
 type Game struct {
 	grid            *Grid
 	time            int
 	autoPlay        bool
+	fastPlay        bool
 	autoPlayCounter int
 }
 
@@ -41,13 +43,22 @@ func (g *Game) Update() error {
 		x, y := ebiten.CursorPosition()
 		if isAutoPlayButtonAt(x, y) {
 			g.autoPlay = !g.autoPlay
+			g.fastPlay = false
+			g.autoPlayCounter = 0
+		} else if isFastPlayButtonAt(x, y) {
+			g.fastPlay = !g.fastPlay
+			g.autoPlay = false
 			g.autoPlayCounter = 0
 		}
 	}
 
-	if g.autoPlay {
+	if g.autoPlay || g.fastPlay {
 		g.autoPlayCounter++
-		if g.autoPlayCounter >= autoPlayIntervalTicks {
+		interval := autoPlayIntervalTicks
+		if g.fastPlay {
+			interval = fastPlayIntervalTicks
+		}
+		if g.autoPlayCounter >= interval {
 			g.advanceTime()
 			g.autoPlayCounter = 0
 		}
@@ -58,7 +69,7 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	g.grid.Draw(screen)
-	drawMenu(screen, g.grid, g.time, g.autoPlay)
+	drawMenu(screen, g.grid, g.time, g.autoPlay, g.fastPlay)
 }
 
 func (g *Game) advanceTime() {

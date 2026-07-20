@@ -11,6 +11,13 @@ import (
 type CellState int
 
 const (
+	superEffectiveChangeChance = 1.0
+	normalChangeChance         = 1.0 / 4.0
+	notVeryEffectiveChance     = 1.0 / 8.0
+	noEffectChangeChance       = 0.0
+)
+
+const (
 	CellNormal CellState = iota
 	CellFire
 	CellWater
@@ -35,6 +42,15 @@ const (
 type Cell struct {
 	State CellState
 }
+
+type attackEffect int
+
+const (
+	effectNone attackEffect = iota
+	effectNotVeryEffective
+	effectNormal
+	effectSuperEffective
+)
 
 type cellPosition struct {
 	row    int
@@ -126,7 +142,8 @@ func (g *Grid) ResolveAttacks() {
 			attackerState := previous[row][column].State
 			targetState := previous[target.row][target.column].State
 
-			if isSuperEffective(attackerState, targetState) {
+			chance := changeChance(attackEffectiveness(attackerState, targetState))
+			if rand.Float64() < chance {
 				targetIndex := target.row*g.Columns + target.column
 				successfulAttacks[targetIndex] = append(successfulAttacks[targetIndex], attackerState)
 			}
@@ -143,6 +160,90 @@ func (g *Grid) ResolveAttacks() {
 	}
 
 	g.Cells = next
+}
+
+func attackEffectiveness(attacker, target CellState) attackEffect {
+	if hasNoEffect(attacker, target) {
+		return effectNone
+	}
+	if isSuperEffective(attacker, target) {
+		return effectSuperEffective
+	}
+	if isNotVeryEffective(attacker, target) {
+		return effectNotVeryEffective
+	}
+	return effectNormal
+}
+
+func changeChance(effect attackEffect) float64 {
+	switch effect {
+	case effectSuperEffective:
+		return superEffectiveChangeChance
+	case effectNormal:
+		return normalChangeChance
+	case effectNotVeryEffective:
+		return notVeryEffectiveChance
+	case effectNone:
+		return noEffectChangeChance
+	default:
+		return 0
+	}
+}
+
+func hasNoEffect(attacker, target CellState) bool {
+	return attacker == CellNormal && target == CellGhost ||
+		attacker == CellElectric && target == CellGround ||
+		attacker == CellFighting && target == CellGhost ||
+		attacker == CellPoison && target == CellSteel ||
+		attacker == CellGround && target == CellFlying ||
+		attacker == CellPsychic && target == CellDark ||
+		attacker == CellGhost && target == CellNormal ||
+		attacker == CellDragon && target == CellFairy
+}
+
+func isNotVeryEffective(attacker, target CellState) bool {
+	switch attacker {
+	case CellNormal:
+		return target == CellRock || target == CellSteel
+	case CellFire:
+		return target == CellFire || target == CellWater || target == CellRock || target == CellDragon
+	case CellWater:
+		return target == CellWater || target == CellGrass || target == CellDragon
+	case CellElectric:
+		return target == CellElectric || target == CellGrass || target == CellDragon
+	case CellGrass:
+		return target == CellFire || target == CellGrass || target == CellPoison || target == CellFlying ||
+			target == CellBug || target == CellDragon || target == CellSteel
+	case CellIce:
+		return target == CellFire || target == CellWater || target == CellIce || target == CellSteel
+	case CellFighting:
+		return target == CellPoison || target == CellFlying || target == CellPsychic || target == CellBug || target == CellFairy
+	case CellPoison:
+		return target == CellPoison || target == CellGround || target == CellRock || target == CellGhost
+	case CellGround:
+		return target == CellGrass || target == CellBug
+	case CellFlying:
+		return target == CellElectric || target == CellRock || target == CellSteel
+	case CellPsychic:
+		return target == CellPsychic || target == CellSteel
+	case CellBug:
+		return target == CellFire || target == CellFighting || target == CellPoison || target == CellFlying ||
+			target == CellGhost || target == CellSteel || target == CellFairy
+	case CellRock:
+		return target == CellFighting || target == CellGround || target == CellSteel
+	case CellGhost:
+		return target == CellDark
+	case CellDragon:
+		return target == CellSteel
+	case CellDark:
+		return target == CellFighting || target == CellDark || target == CellFairy
+	case CellSteel:
+		return target == CellFire || target == CellWater || target == CellElectric || target == CellSteel
+	case CellFairy:
+		return target == CellFire || target == CellPoison || target == CellSteel
+	default:
+		return false
+	}
 }
 
 func (g *Grid) copyCells() [][]Cell {

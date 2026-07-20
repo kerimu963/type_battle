@@ -27,7 +27,9 @@ sudo apt install -y gcc libc6-dev libgl1-mesa-dev libx11-dev libxcursor-dev libx
 go run .
 ```
 
-800×600の白いCanvasウィンドウが表示されます。ウィンドウを閉じるとプログラムも終了します。
+800×600のCanvasウィンドウにグリッドが表示されます。マスを左クリックすると、そのマスの状態が空と選択中の間で切り替わります。ウィンドウを閉じるとプログラムも終了します。
+
+グリッドの列数と行数は、`main.go`の`gridColumns`と`gridRows`で変更できます。
 
 ## トラブルシューティング
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"math/rand/v2"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -10,12 +11,18 @@ import (
 type CellState int
 
 const (
-	CellEmpty CellState = iota
-	CellActive
+	CellFire CellState = iota
+	CellWater
+	CellGrass
 )
 
 type Cell struct {
 	State CellState
+}
+
+type cellPosition struct {
+	row    int
+	column int
 }
 
 type Grid struct {
@@ -29,9 +36,13 @@ type Grid struct {
 }
 
 func NewGrid(columns, rows, x, y, width, height int) *Grid {
+	initialCells := generateInitialCells(columns * rows)
 	cells := make([][]Cell, rows)
 	for row := range cells {
 		cells[row] = make([]Cell, columns)
+		for column := range cells[row] {
+			cells[row][column] = initialCells[row*columns+column]
+		}
 	}
 
 	return &Grid{
@@ -45,20 +56,88 @@ func NewGrid(columns, rows, x, y, width, height int) *Grid {
 	}
 }
 
-func (g *Grid) ToggleAt(x, y int) {
-	if x < g.x || x >= g.x+g.width || y < g.y || y >= g.y+g.height {
-		return
+func generateInitialCells(cellCount int) []Cell {
+	states := []CellState{CellFire, CellWater, CellGrass}
+	rand.Shuffle(len(states), func(i, j int) {
+		states[i], states[j] = states[j], states[i]
+	})
+
+	counts := make(map[CellState]int, len(states))
+	baseCount := cellCount / len(states)
+	for _, state := range states {
+		counts[state] = baseCount
+	}
+	for i := 0; i < cellCount%len(states); i++ {
+		counts[states[i]]++
 	}
 
-	column := (x - g.x) * g.Columns / g.width
-	row := (y - g.y) * g.Rows / g.height
-	cell := &g.Cells[row][column]
-
-	if cell.State == CellEmpty {
-		cell.State = CellActive
-	} else {
-		cell.State = CellEmpty
+	cells := make([]Cell, 0, cellCount)
+	for _, state := range states {
+		for range counts[state] {
+			cells = append(cells, Cell{State: state})
+		}
 	}
+
+	rand.Shuffle(len(cells), func(i, j int) {
+		cells[i], cells[j] = cells[j], cells[i]
+	})
+
+	return cells
+}
+
+func (g *Grid) ResolveAttacks() {
+	previous := g.copyCells()
+	next := g.copyCells()
+
+	for row := range g.Rows {
+		for column := range g.Columns {
+			targets := g.neighborsOf(row, column)
+			if len(targets) == 0 {
+				continue
+			}
+			target := targets[rand.IntN(len(targets))]
+			attackerState := previous[row][column].State
+			targetState := previous[target.row][target.column].State
+
+			if isSuperEffective(attackerState, targetState) {
+				next[target.row][target.column].State = attackerState
+			}
+		}
+	}
+
+	g.Cells = next
+}
+
+func (g *Grid) copyCells() [][]Cell {
+	cells := make([][]Cell, g.Rows)
+	for row := range g.Rows {
+		cells[row] = make([]Cell, g.Columns)
+		copy(cells[row], g.Cells[row])
+	}
+	return cells
+}
+
+func (g *Grid) neighborsOf(row, column int) []cellPosition {
+	neighbors := make([]cellPosition, 0, 4)
+	if row > 0 {
+		neighbors = append(neighbors, cellPosition{row: row - 1, column: column})
+	}
+	if row+1 < g.Rows {
+		neighbors = append(neighbors, cellPosition{row: row + 1, column: column})
+	}
+	if column > 0 {
+		neighbors = append(neighbors, cellPosition{row: row, column: column - 1})
+	}
+	if column+1 < g.Columns {
+		neighbors = append(neighbors, cellPosition{row: row, column: column + 1})
+	}
+	return neighbors
+}
+
+func isSuperEffective(attacker, target CellState) bool {
+	return attacker == CellFire && target == CellGrass ||
+		attacker == CellWater && target == CellFire ||
+		attacker == CellGrass && target == CellWater
 }
 
 func (g *Grid) Draw(screen *ebiten.Image) {
@@ -70,11 +149,9 @@ func (g *Grid) Draw(screen *ebiten.Image) {
 
 	for row := range g.Rows {
 		for column := range g.Columns {
-			if g.Cells[row][column].State == CellActive {
-				x := gridX + float32(column)*cellWidth
-				y := gridY + float32(row)*cellHeight
-				vector.FillRect(screen, x, y, cellWidth, cellHeight, color.RGBA{R: 80, G: 160, B: 255, A: 255}, false)
-			}
+			x := gridX + float32(column)*cellWidth
+			y := gridY + float32(row)*cellHeight
+			vector.FillRect(screen, x, y, cellWidth, cellHeight, cellColor(g.Cells[row][column].State), false)
 		}
 	}
 
@@ -89,14 +166,27 @@ func (g *Grid) Draw(screen *ebiten.Image) {
 	}
 }
 
-func (g *Grid) ActiveCellCount() int {
+func (g *Grid) CountState(state CellState) int {
 	count := 0
 	for row := range g.Rows {
 		for column := range g.Columns {
-			if g.Cells[row][column].State == CellActive {
+			if g.Cells[row][column].State == state {
 				count++
 			}
 		}
 	}
 	return count
+}
+
+func cellColor(state CellState) color.Color {
+	switch state {
+	case CellFire:
+		return color.RGBA{R: 230, G: 70, B: 60, A: 255}
+	case CellWater:
+		return color.RGBA{R: 60, G: 130, B: 230, A: 255}
+	case CellGrass:
+		return color.RGBA{R: 70, G: 180, B: 90, A: 255}
+	default:
+		return color.White
+	}
 }

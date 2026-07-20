@@ -9,11 +9,11 @@ import (
 
 const (
 	menuWidth             = 200
-	gridWidth             = 800
+	gridWidth             = 600
 	canvasWidth           = menuWidth + gridWidth
 	canvasHeight          = 600
-	gridColumns           = 100
-	gridRows              = 100
+	gridColumns           = 250
+	gridRows              = 200
 	autoPlayIntervalTicks = 6
 )
 
@@ -66,13 +66,17 @@ func (g *Game) advanceTime() {
 	g.time++
 }
 
-func (g *Game) Layout(_, _ int) (int, int) {
-	return canvasWidth, canvasHeight
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	if outsideWidth <= menuWidth || outsideHeight <= 0 {
+		return canvasWidth, canvasHeight
+	}
+	g.grid.SetBounds(menuWidth, 0, outsideWidth-menuWidth, outsideHeight)
+	return outsideWidth, outsideHeight
 }
 
 func main() {
-	ebiten.SetWindowSize(canvasWidth, canvasHeight)
 	ebiten.SetWindowTitle("Type Battle")
+	ebiten.SetFullscreen(true)
 
 	if err := ebiten.RunGame(newGame()); err != nil {
 		log.Fatal(err)

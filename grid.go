@@ -11,9 +11,25 @@ import (
 type CellState int
 
 const (
-	CellFire CellState = iota
+	CellNormal CellState = iota
+	CellFire
 	CellWater
+	CellElectric
 	CellGrass
+	CellIce
+	CellFighting
+	CellPoison
+	CellGround
+	CellFlying
+	CellPsychic
+	CellBug
+	CellRock
+	CellGhost
+	CellDragon
+	CellDark
+	CellSteel
+	CellFairy
+	cellStateCount
 )
 
 type Cell struct {
@@ -33,6 +49,13 @@ type Grid struct {
 	y       int
 	width   int
 	height  int
+}
+
+func (g *Grid) SetBounds(x, y, width, height int) {
+	g.x = x
+	g.y = y
+	g.width = width
+	g.height = height
 }
 
 func NewGrid(columns, rows, x, y, width, height int) *Grid {
@@ -57,7 +80,10 @@ func NewGrid(columns, rows, x, y, width, height int) *Grid {
 }
 
 func generateInitialCells(cellCount int) []Cell {
-	states := []CellState{CellFire, CellWater, CellGrass}
+	states := make([]CellState, cellStateCount)
+	for state := range cellStateCount {
+		states[state] = CellState(state)
+	}
 	rand.Shuffle(len(states), func(i, j int) {
 		states[i], states[j] = states[j], states[i]
 	})
@@ -88,6 +114,7 @@ func generateInitialCells(cellCount int) []Cell {
 func (g *Grid) ResolveAttacks() {
 	previous := g.copyCells()
 	next := g.copyCells()
+	successfulAttacks := make([][]CellState, g.Rows*g.Columns)
 
 	for row := range g.Rows {
 		for column := range g.Columns {
@@ -100,9 +127,19 @@ func (g *Grid) ResolveAttacks() {
 			targetState := previous[target.row][target.column].State
 
 			if isSuperEffective(attackerState, targetState) {
-				next[target.row][target.column].State = attackerState
+				targetIndex := target.row*g.Columns + target.column
+				successfulAttacks[targetIndex] = append(successfulAttacks[targetIndex], attackerState)
 			}
 		}
+	}
+
+	for targetIndex, attacks := range successfulAttacks {
+		if len(attacks) == 0 {
+			continue
+		}
+		row := targetIndex / g.Columns
+		column := targetIndex % g.Columns
+		next[row][column].State = attacks[rand.IntN(len(attacks))]
 	}
 
 	g.Cells = next
@@ -135,9 +172,46 @@ func (g *Grid) neighborsOf(row, column int) []cellPosition {
 }
 
 func isSuperEffective(attacker, target CellState) bool {
-	return attacker == CellFire && target == CellGrass ||
-		attacker == CellWater && target == CellFire ||
-		attacker == CellGrass && target == CellWater
+	switch attacker {
+	case CellNormal:
+		return false
+	case CellFire:
+		return target == CellGrass || target == CellIce || target == CellBug || target == CellSteel
+	case CellWater:
+		return target == CellFire || target == CellGround || target == CellRock
+	case CellElectric:
+		return target == CellWater || target == CellFlying
+	case CellGrass:
+		return target == CellWater || target == CellGround || target == CellRock
+	case CellIce:
+		return target == CellGrass || target == CellGround || target == CellFlying || target == CellDragon
+	case CellFighting:
+		return target == CellNormal || target == CellIce || target == CellRock || target == CellDark || target == CellSteel
+	case CellPoison:
+		return target == CellGrass || target == CellFairy
+	case CellGround:
+		return target == CellFire || target == CellElectric || target == CellPoison || target == CellRock || target == CellSteel
+	case CellFlying:
+		return target == CellGrass || target == CellFighting || target == CellBug
+	case CellPsychic:
+		return target == CellFighting || target == CellPoison
+	case CellBug:
+		return target == CellGrass || target == CellPsychic || target == CellDark
+	case CellRock:
+		return target == CellFire || target == CellIce || target == CellFlying || target == CellBug
+	case CellGhost:
+		return target == CellPsychic || target == CellGhost
+	case CellDragon:
+		return target == CellDragon
+	case CellDark:
+		return target == CellPsychic || target == CellGhost
+	case CellSteel:
+		return target == CellIce || target == CellRock || target == CellFairy
+	case CellFairy:
+		return target == CellFighting || target == CellDragon || target == CellDark
+	default:
+		return false
+	}
 }
 
 func (g *Grid) Draw(screen *ebiten.Image) {
@@ -166,27 +240,67 @@ func (g *Grid) Draw(screen *ebiten.Image) {
 	}
 }
 
-func (g *Grid) CountState(state CellState) int {
-	count := 0
+func (g *Grid) StateCounts() [cellStateCount]int {
+	var counts [cellStateCount]int
 	for row := range g.Rows {
 		for column := range g.Columns {
-			if g.Cells[row][column].State == state {
-				count++
-			}
+			counts[g.Cells[row][column].State]++
 		}
 	}
-	return count
+	return counts
 }
 
 func cellColor(state CellState) color.Color {
 	switch state {
+	case CellNormal:
+		return color.RGBA{R: 0xA8, G: 0xA7, B: 0x7A, A: 255}
 	case CellFire:
-		return color.RGBA{R: 230, G: 70, B: 60, A: 255}
+		return color.RGBA{R: 0xEE, G: 0x81, B: 0x30, A: 255}
 	case CellWater:
-		return color.RGBA{R: 60, G: 130, B: 230, A: 255}
+		return color.RGBA{R: 0x63, G: 0x90, B: 0xF0, A: 255}
+	case CellElectric:
+		return color.RGBA{R: 0xF7, G: 0xD0, B: 0x2C, A: 255}
 	case CellGrass:
-		return color.RGBA{R: 70, G: 180, B: 90, A: 255}
+		return color.RGBA{R: 0x7A, G: 0xC7, B: 0x4C, A: 255}
+	case CellIce:
+		return color.RGBA{R: 0x96, G: 0xD9, B: 0xD6, A: 255}
+	case CellFighting:
+		return color.RGBA{R: 0xC2, G: 0x2E, B: 0x28, A: 255}
+	case CellPoison:
+		return color.RGBA{R: 0xA3, G: 0x3E, B: 0xA1, A: 255}
+	case CellGround:
+		return color.RGBA{R: 0xE2, G: 0xBF, B: 0x65, A: 255}
+	case CellFlying:
+		return color.RGBA{R: 0xA9, G: 0x8F, B: 0xF3, A: 255}
+	case CellPsychic:
+		return color.RGBA{R: 0xF9, G: 0x55, B: 0x87, A: 255}
+	case CellBug:
+		return color.RGBA{R: 0xA6, G: 0xB9, B: 0x1A, A: 255}
+	case CellRock:
+		return color.RGBA{R: 0xB6, G: 0xA1, B: 0x36, A: 255}
+	case CellGhost:
+		return color.RGBA{R: 0x73, G: 0x57, B: 0x97, A: 255}
+	case CellDragon:
+		return color.RGBA{R: 0x6F, G: 0x35, B: 0xFC, A: 255}
+	case CellDark:
+		return color.RGBA{R: 0x70, G: 0x57, B: 0x46, A: 255}
+	case CellSteel:
+		return color.RGBA{R: 0xB7, G: 0xB7, B: 0xCE, A: 255}
+	case CellFairy:
+		return color.RGBA{R: 0xD6, G: 0x85, B: 0xAD, A: 255}
 	default:
 		return color.White
 	}
+}
+
+func cellStateName(state CellState) string {
+	names := [...]string{
+		"ノーマル", "ほのお", "みず", "でんき", "くさ", "こおり",
+		"かくとう", "どく", "じめん", "ひこう", "エスパー", "むし",
+		"いわ", "ゴースト", "ドラゴン", "あく", "はがね", "フェアリー",
+	}
+	if state < 0 || state >= cellStateCount {
+		return "不明"
+	}
+	return names[state]
 }

@@ -17,6 +17,7 @@ const (
 	autoPlayIntervalTicks = 6
 	fastPlayIntervalTicks = 1
 	chartHistoryLimit     = 300
+	topTypeDisplayCount   = 5
 )
 
 type Game struct {

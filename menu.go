@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image/color"
+	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -49,8 +50,9 @@ func drawMenu(screen *ebiten.Image, grid *Grid, currentTime int, autoPlay, fastP
 
 	counts := grid.StateCounts()
 	for state := CellNormal; state < cellStateCount; state++ {
-		drawStateLegend(screen, 108+float64(state)*22, state, cellStateName(state), counts[state])
+		drawStateLegend(screen, 20, 108+float64(state)*22, state, cellStateName(state), counts[state])
 	}
+	drawTopTypes(screen, counts)
 	ebitenutil.DebugPrintAt(screen, "Play: 10/s  Fast: 60/s", 20, 508)
 
 	buttonColor := color.RGBA{R: 75, G: 85, B: 105, A: 255}
@@ -74,14 +76,40 @@ func drawMenu(screen *ebiten.Image, grid *Grid, currentTime int, autoPlay, fastP
 	ebitenutil.DebugPrintAt(screen, fastButtonText, fastPlayButtonX+23, fastPlayButtonY+9)
 }
 
-func drawStateLegend(screen *ebiten.Image, y float64, state CellState, name string, count int) {
-	vector.FillRect(screen, 20, float32(y), 16, 16, cellColor(state), false)
-	vector.StrokeRect(screen, 20, float32(y), 16, 16, 1, color.White, false)
+func drawStateLegend(screen *ebiten.Image, x int, y float64, state CellState, name string, count int) {
+	vector.FillRect(screen, float32(x), float32(y), 16, 16, cellColor(state), false)
+	vector.StrokeRect(screen, float32(x), float32(y), 16, 16, 1, color.White, false)
 
 	op := &text.DrawOptions{}
-	op.GeoM.Translate(44, y)
+	op.GeoM.Translate(float64(x+24), y)
 	op.ColorScale.ScaleWithColor(color.White)
 	text.Draw(screen, fmt.Sprintf("%s: %d", name, count), menuFontFace, op)
+}
+
+type stateRanking struct {
+	state CellState
+	count int
+}
+
+func drawTopTypes(screen *ebiten.Image, counts [cellStateCount]int) {
+	ranking := make([]stateRanking, 0, cellStateCount)
+	for state := CellNormal; state < cellStateCount; state++ {
+		ranking = append(ranking, stateRanking{state: state, count: counts[state]})
+	}
+	sort.Slice(ranking, func(i, j int) bool {
+		if ranking[i].count == ranking[j].count {
+			return ranking[i].state < ranking[j].state
+		}
+		return ranking[i].count > ranking[j].count
+	})
+
+	limit := min(topTypeDisplayCount, len(ranking))
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("TOP %d", limit), 20, 620)
+	for rank := 0; rank < limit; rank++ {
+		entry := ranking[rank]
+		name := fmt.Sprintf("%d. %s", rank+1, cellStateName(entry.state))
+		drawStateLegend(screen, 20, 650+float64(rank)*30, entry.state, name, entry.count)
+	}
 }
 
 func isAutoPlayButtonAt(x, y int) bool {

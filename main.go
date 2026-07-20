@@ -12,14 +12,16 @@ const (
 	gridWidth             = 600
 	canvasWidth           = menuWidth + gridWidth
 	canvasHeight          = 600
-	gridColumns           = 250
-	gridRows              = 200
+	gridColumns           = 200
+	gridRows              = 100
 	autoPlayIntervalTicks = 6
 	fastPlayIntervalTicks = 1
+	chartHistoryLimit     = 300
 )
 
 type Game struct {
 	grid            *Grid
+	secondaryCanvas *Canvas
 	time            int
 	autoPlay        bool
 	fastPlay        bool
@@ -27,10 +29,13 @@ type Game struct {
 }
 
 func newGame() *Game {
-	return &Game{
-		grid: NewGrid(gridColumns, gridRows, menuWidth, 0, gridWidth, canvasHeight),
-		time: 1,
+	game := &Game{
+		grid:            NewGrid(gridColumns, gridRows, menuWidth, 0, gridWidth, canvasHeight),
+		secondaryCanvas: NewCanvas(menuWidth, canvasHeight*3/4, gridWidth, canvasHeight/4),
+		time:            1,
 	}
+	game.secondaryCanvas.AddSnapshot(game.time, game.grid.StateCounts())
+	return game
 }
 
 func (g *Game) Update() error {
@@ -69,19 +74,24 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	g.grid.Draw(screen)
+	g.secondaryCanvas.Draw(screen)
 	drawMenu(screen, g.grid, g.time, g.autoPlay, g.fastPlay)
 }
 
 func (g *Game) advanceTime() {
 	g.grid.ResolveAttacks()
 	g.time++
+	g.secondaryCanvas.AddSnapshot(g.time, g.grid.StateCounts())
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	if outsideWidth <= menuWidth || outsideHeight <= 0 {
 		return canvasWidth, canvasHeight
 	}
-	g.grid.SetBounds(menuWidth, 0, outsideWidth-menuWidth, outsideHeight)
+	secondaryHeight := outsideHeight / 4
+	gridHeight := outsideHeight - secondaryHeight
+	g.grid.SetBounds(menuWidth, 0, outsideWidth-menuWidth, gridHeight)
+	g.secondaryCanvas.SetBounds(menuWidth, gridHeight, outsideWidth-menuWidth, secondaryHeight)
 	return outsideWidth, outsideHeight
 }
 

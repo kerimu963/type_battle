@@ -1,6 +1,10 @@
 # Type Battle
 
+ポケモンのタイプ相性を使ったセル・オートマトンです。
 
+## デモ
+
+![Type Battleの実行デモ](assets/demo.gif)
 
 ## 必要な環境
 
